@@ -1,0 +1,376 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0b5f8f">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<title>상차 수량 입력</title>
+<style>
+/* Layout: 한 손 조작용 단일 열. 위에서부터 입력 3칸 → 저장 → 오늘 기록과 합계. */
+:root {
+  --bg: #eef1f4;
+  --surface: #ffffff;
+  --ink: #17212b;
+  --muted: #5d6b79;
+  --line: #d3dae1;
+  --accent: #0b5f8f;
+  --accent-ink: #ffffff;
+  --total: #fff1cf;
+  --total-ink: #5a3d00;
+  --danger: #b3261e;
+  --ok: #1d7a46;
+  --font: "Apple SD Gothic Neo", "Malgun Gothic", system-ui, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11181f; --surface: #1a232c; --ink: #e8eef3; --muted: #93a2b0; --line: #2e3a46;
+    --accent: #5db4e6; --accent-ink: #06202f; --total: #3a2e10; --total-ink: #ffdf91;
+    --danger: #ff8a80; --ok: #6fd69a; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11181f; --surface: #1a232c; --ink: #e8eef3; --muted: #93a2b0; --line: #2e3a46;
+  --accent: #5db4e6; --accent-ink: #06202f; --total: #3a2e10; --total-ink: #ffdf91;
+  --danger: #ff8a80; --ok: #6fd69a; color-scheme: dark;
+}
+* { box-sizing: border-box; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font); font-size: 16px; line-height: 1.5;
+  padding-block: 16px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+main { max-width: 560px; margin: 0 auto; display: grid; gap: 16px; }
+header { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; }
+h1 { font-size: 22px; font-weight: 900; margin: 0; letter-spacing: -0.01em; text-wrap: balance; }
+.date { color: var(--muted); font-size: 14px; font-variant-numeric: tabular-nums; }
+
+form { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 16px; display: grid; gap: 14px; }
+.field { display: grid; gap: 6px; min-width: 0; }
+label { font-size: 13px; font-weight: 700; color: var(--muted); letter-spacing: 0.04em; }
+.row { display: flex; gap: 8px; min-width: 0; }
+input[type="text"], input[type="search"], input[inputmode] {
+  flex: 1; min-width: 0; font: inherit; font-size: 20px; font-weight: 500; color: var(--ink);
+  background: var(--bg); border: 2px solid var(--line); border-radius: 8px; padding: 12px 14px; min-height: 56px;
+}
+input:focus-visible, button:focus-visible, select:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+input.qty { font-size: 32px; font-weight: 900; font-variant-numeric: tabular-nums; text-align: right; }
+.mic {
+  flex: none; width: 56px; min-height: 56px; border-radius: 8px; border: 2px solid var(--accent);
+  background: transparent; color: var(--accent); display: grid; place-items: center; cursor: pointer;
+}
+.mic svg { width: 26px; height: 26px; }
+.mic[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip {
+  font: inherit; font-size: 14px; font-weight: 500; color: var(--ink); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 999px; padding: 6px 12px; min-height: 36px; cursor: pointer;
+}
+.units { display: flex; gap: 6px; }
+.unit {
+  flex: 1; font: inherit; font-size: 16px; font-weight: 700; min-height: 44px; border-radius: 8px;
+  border: 2px solid var(--line); background: var(--bg); color: var(--ink); cursor: pointer;
+}
+.unit[aria-pressed="true"] { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.save {
+  font: inherit; font-size: 20px; font-weight: 900; min-height: 60px; border: 0; border-radius: 10px;
+  background: var(--accent); color: var(--accent-ink); cursor: pointer;
+}
+.save:active { transform: translateY(1px); }
+.hint { font-size: 13px; color: var(--muted); margin: 0; min-height: 20px; }
+.hint.err { color: var(--danger); }
+.hint.ok { color: var(--ok); }
+
+.summary { background: var(--total); color: var(--total-ink); border-radius: 12px; padding: 14px 16px; display: grid; gap: 4px; }
+.summary .big { font-size: 34px; font-weight: 900; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.summary .sub { font-size: 14px; font-variant-numeric: tabular-nums; }
+
+.list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.item { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 12px 14px; display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; align-items: center; }
+.route { min-width: 0; font-weight: 700; overflow-wrap: anywhere; }
+.route .arrow { color: var(--muted); font-weight: 400; padding-inline: 4px; }
+.q { font-size: 24px; font-weight: 900; font-variant-numeric: tabular-nums; text-align: right; white-space: nowrap; }
+.q small { font-size: 13px; font-weight: 500; color: var(--muted); margin-left: 2px; }
+.meta { color: var(--muted); font-size: 13px; font-variant-numeric: tabular-nums; }
+.del { justify-self: end; font: inherit; font-size: 13px; background: none; border: 0; color: var(--muted); cursor: pointer; padding: 6px 4px; min-height: 36px; }
+.del.armed { color: var(--danger); font-weight: 700; }
+.empty { color: var(--muted); text-align: center; padding: 20px 8px; border: 1px dashed var(--line); border-radius: 10px; }
+.tools { display: flex; flex-wrap: wrap; gap: 8px; }
+.tool {
+  flex: 1 1 140px; font: inherit; font-size: 15px; font-weight: 700; min-height: 48px; border-radius: 8px;
+  border: 2px solid var(--line); background: var(--surface); color: var(--ink); cursor: pointer;
+}
+h2 { font-size: 15px; margin: 0; color: var(--muted); letter-spacing: 0.04em; }
+@media (prefers-reduced-motion: no-preference) { .save { transition: transform 0.08s; } }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>상차 수량 입력</h1>
+    <span class="date" id="today"></span>
+  </header>
+
+  <form id="f" autocomplete="off">
+    <div class="field">
+      <label for="from">상차지</label>
+      <div class="row">
+        <input id="from" type="text" enterkeyhint="next" placeholder="말하거나 입력" aria-describedby="hint">
+        <button type="button" class="mic" data-for="from" aria-pressed="false" aria-label="상차지 음성 입력"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      </div>
+      <div class="chips" id="chips-from"></div>
+    </div>
+
+    <div class="field">
+      <label for="to">하차지</label>
+      <div class="row">
+        <input id="to" type="text" enterkeyhint="next" placeholder="말하거나 입력">
+        <button type="button" class="mic" data-for="to" aria-pressed="false" aria-label="하차지 음성 입력"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      </div>
+      <div class="chips" id="chips-to"></div>
+    </div>
+
+    <div class="field">
+      <label for="qty">상차수량</label>
+      <div class="row">
+        <input id="qty" class="qty" type="text" inputmode="numeric" enterkeyhint="done" placeholder="0">
+        <button type="button" class="mic" data-for="qty" aria-pressed="false" aria-label="수량 음성 입력"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="12" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+      </div>
+      <div class="units" role="group" aria-label="단위">
+        <button type="button" class="unit" data-u="박스" aria-pressed="true">박스</button>
+        <button type="button" class="unit" data-u="파렛트" aria-pressed="false">파렛트</button>
+        <button type="button" class="unit" data-u="개" aria-pressed="false">개</button>
+      </div>
+    </div>
+
+    <button type="submit" class="save">저장</button>
+    <p class="hint" id="hint" role="status">칸 옆 마이크 버튼을 눌러 말하세요. "이십삼"처럼 말해도 숫자로 바뀝니다.</p>
+  </form>
+
+  <section class="summary" aria-live="polite">
+    <span class="sub">오늘 상차 합계</span>
+    <span class="big" id="total">0</span>
+    <span class="sub" id="bykind"></span>
+  </section>
+
+  <section style="display:grid;gap:8px">
+    <h2>오늘 기록</h2>
+    <ul class="list" id="list"></ul>
+  </section>
+
+  <div class="tools">
+    <button type="button" class="tool" id="copy">기록 복사</button>
+    <button type="button" class="tool" id="csv" hidden>CSV 저장</button>
+  </div>
+</main>
+
+<script>
+(function () {
+  var KEY = "sangcha-records-v1";
+  var $ = function (id) { return document.getElementById(id); };
+  var records = [];
+  var unit = "박스";
+
+  function load() { try { records = JSON.parse(localStorage.getItem(KEY) || "[]"); } catch (e) { records = []; } }
+  function persist() { try { localStorage.setItem(KEY, JSON.stringify(records)); } catch (e) {} }
+  function ymd(d) { return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0"); }
+  function hm(d) { return String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0"); }
+  function todayKey() { return ymd(new Date()); }
+  var WD = ["일", "월", "화", "수", "목", "금", "토"];
+  (function () { var d = new Date(); $("today").textContent = (d.getMonth() + 1) + "월 " + d.getDate() + "일 (" + WD[d.getDay()] + ")"; })();
+
+  // 한글 수 읽기: 숫자가 있으면 그대로, 없으면 "이십삼", "스물세 개"를 숫자로.
+  function parseQty(raw) {
+    var s = String(raw || "").replace(/,/g, "").trim();
+    var m = s.match(/\d+/);
+    if (m) return parseInt(m[0], 10);
+    var nat = { "하나": 1, "한": 1, "둘": 2, "두": 2, "셋": 3, "세": 3, "석": 3, "넷": 4, "네": 4, "넉": 4, "다섯": 5, "여섯": 6, "일곱": 7, "여덟": 8, "아홉": 9 };
+    var tens = { "열": 10, "스물": 20, "스무": 20, "서른": 30, "마흔": 40, "쉰": 50, "예순": 60, "일흔": 70, "여든": 80, "아흔": 90 };
+    var t = s.replace(/[^가-힣]/g, "").replace(/(박스|파렛트|팔레트|개|상자|판)$/, "");
+    var nm = t.match(/^(스물|스무|서른|마흔|쉰|예순|일흔|여든|아흔|열)?(하나|한|둘|두|셋|세|석|넷|네|넉|다섯|여섯|일곱|여덟|아홉)?$/);
+    if (nm && t) return (tens[nm[1]] || 0) + (nat[nm[2]] || 0);
+    var dg = { "영": 0, "공": 0, "일": 1, "이": 2, "삼": 3, "사": 4, "오": 5, "육": 6, "칠": 7, "팔": 8, "구": 9 };
+    var un = { "십": 10, "백": 100, "천": 1000 };
+    var total = 0, cur = 0, found = false, i, c;
+    for (i = 0; i < t.length; i++) {
+      c = t[i];
+      if (c in dg) { cur = dg[c]; found = true; }
+      else if (c in un) { total += (cur || 1) * un[c]; cur = 0; found = true; }
+      else if (c === "만") { total = (total + cur || 1) * 10000; cur = 0; found = true; }
+      else return NaN;
+    }
+    return found ? total + cur : NaN;
+  }
+
+  function setHint(msg, kind) { var h = $("hint"); h.textContent = msg; h.className = "hint" + (kind ? " " + kind : ""); }
+
+  function recent(field) {
+    var seen = {}, out = [];
+    for (var i = records.length - 1; i >= 0 && out.length < 6; i--) {
+      var v = records[i][field];
+      if (v && !seen[v]) { seen[v] = 1; out.push(v); }
+    }
+    return out;
+  }
+  function renderChips() {
+    [["from", "chips-from"], ["to", "chips-to"]].forEach(function (p) {
+      var box = $(p[1]); box.textContent = "";
+      recent(p[0]).forEach(function (v) {
+        var b = document.createElement("button");
+        b.type = "button"; b.className = "chip"; b.textContent = v;
+        b.addEventListener("click", function () { $(p[0]).value = v; (p[0] === "from" ? $("to") : $("qty")).focus(); });
+        box.appendChild(b);
+      });
+    });
+  }
+
+  function todays() { var k = todayKey(); return records.filter(function (r) { return r.date === k; }); }
+
+  function render() {
+    var list = $("list"); list.textContent = "";
+    var rows = todays().slice().reverse();
+    var sum = {}, all = 0;
+    todays().forEach(function (r) { sum[r.unit] = (sum[r.unit] || 0) + r.qty; all += r.qty; });
+    $("total").textContent = all.toLocaleString("ko-KR");
+    var parts = Object.keys(sum).map(function (u) { return u + " " + sum[u].toLocaleString("ko-KR"); });
+    $("bykind").textContent = parts.length ? parts.join(" · ") + " · " + rows.length + "건" : "아직 기록이 없습니다";
+    if (!rows.length) {
+      var e = document.createElement("li"); e.className = "empty"; e.textContent = "위에 상차지, 하차지, 수량을 넣고 저장하면 여기에 쌓입니다.";
+      list.appendChild(e);
+    }
+    rows.forEach(function (r) {
+      var li = document.createElement("li"); li.className = "item";
+      var route = document.createElement("div"); route.className = "route";
+      var a = document.createElement("span"); a.textContent = r.from;
+      var ar = document.createElement("span"); ar.className = "arrow"; ar.textContent = "→";
+      var b = document.createElement("span"); b.textContent = r.to;
+      route.append(a, ar, b);
+      var q = document.createElement("div"); q.className = "q"; q.textContent = r.qty.toLocaleString("ko-KR");
+      var sm = document.createElement("small"); sm.textContent = r.unit; q.appendChild(sm);
+      var meta = document.createElement("div"); meta.className = "meta"; meta.textContent = r.time;
+      var del = document.createElement("button"); del.type = "button"; del.className = "del"; del.textContent = "삭제";
+      del.addEventListener("click", function () {
+        if (!del.classList.contains("armed")) {
+          del.classList.add("armed"); del.textContent = "한 번 더 누르면 삭제";
+          setTimeout(function () { del.classList.remove("armed"); del.textContent = "삭제"; }, 3000);
+          return;
+        }
+        records = records.filter(function (x) { return x.id !== r.id; });
+        persist(); render(); renderChips();
+      });
+      li.append(route, q, meta, del);
+      list.appendChild(li);
+    });
+    renderChips();
+  }
+
+  // 단위 선택
+  document.querySelectorAll(".unit").forEach(function (b) {
+    b.addEventListener("click", function () {
+      unit = b.dataset.u;
+      document.querySelectorAll(".unit").forEach(function (x) { x.setAttribute("aria-pressed", String(x === b)); });
+    });
+  });
+
+  // Enter로 다음 칸
+  $("from").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); $("to").focus(); } });
+  $("to").addEventListener("keydown", function (e) { if (e.key === "Enter") { e.preventDefault(); $("qty").focus(); } });
+  $("qty").addEventListener("blur", function () {
+    var v = $("qty").value.trim();
+    if (!v) return;
+    var n = parseQty(v);
+    if (!isNaN(n)) $("qty").value = String(n);
+  });
+
+  // 저장
+  $("f").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var from = $("from").value.trim(), to = $("to").value.trim(), n = parseQty($("qty").value);
+    if (!from) { setHint("상차지를 입력해 주세요.", "err"); $("from").focus(); return; }
+    if (!to) { setHint("하차지를 입력해 주세요.", "err"); $("to").focus(); return; }
+    if (isNaN(n) || n <= 0) { setHint("수량을 숫자로 입력해 주세요. 예: 24 또는 이십사", "err"); $("qty").focus(); return; }
+    var d = new Date();
+    records.push({ id: d.getTime() + "-" + Math.random().toString(36).slice(2, 6), date: ymd(d), time: hm(d), from: from, to: to, qty: n, unit: unit });
+    persist();
+    setHint(from + " → " + to + " " + n + unit + " 저장했습니다.", "ok");
+    $("qty").value = "";
+    $("to").value = "";
+    render();
+    $("to").focus();
+  });
+
+  // 마이크 버튼: 누르면 폰 마이크가 켜지고 말한 내용이 칸에 들어갑니다.
+  var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+  var active = null;
+  document.querySelectorAll(".mic").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var target = $(btn.dataset.for);
+      if (active) { try { active.stop(); } catch (e) {} return; }
+      if (!SR) { target.focus(); setHint("이 브라우저는 음성 인식을 지원하지 않습니다. 크롬으로 열어 주세요. 키보드의 마이크 버튼으로도 입력할 수 있습니다.", "err"); return; }
+      var rec;
+      try { rec = new SR(); } catch (e) { target.focus(); setHint("키보드의 마이크 버튼을 눌러 말해 주세요.", "err"); return; }
+      rec.lang = "ko-KR"; rec.interimResults = false; rec.maxAlternatives = 1;
+      active = rec; btn.setAttribute("aria-pressed", "true"); setHint("듣고 있습니다…");
+      rec.onresult = function (ev) {
+        var t = ev.results[0][0].transcript.trim();
+        if (btn.dataset.for === "qty") { var n = parseQty(t); target.value = isNaN(n) ? t : String(n); }
+        else target.value = t;
+        setHint("\"" + t + "\" 로 입력했습니다.", "ok");
+      };
+      rec.onerror = function (ev) { var nm = ev && ev.error; setHint(nm === "not-allowed" || nm === "service-not-allowed" ? "마이크 권한이 꺼져 있습니다. 주소창 왼쪽 자물쇠에서 마이크를 허용해 주세요." : nm === "no-speech" ? "음성이 들리지 않았습니다. 다시 눌러 말해 주세요." : "음성 인식을 쓸 수 없습니다. 키보드 마이크를 이용해 주세요.", "err"); };
+      rec.onend = function () { active = null; btn.setAttribute("aria-pressed", "false"); };
+      try { rec.start(); } catch (e) { active = null; btn.setAttribute("aria-pressed", "false"); target.focus(); setHint("키보드의 마이크 버튼을 눌러 말해 주세요.", "err"); }
+    });
+  });
+
+  // 기록 복사 (카톡 등에 붙여넣기)
+  function summaryText() {
+    var rows = todays();
+    var sum = {}; rows.forEach(function (r) { sum[r.unit] = (sum[r.unit] || 0) + r.qty; });
+    var lines = [$("today").textContent + " 상차 기록"];
+    rows.forEach(function (r) { lines.push(r.time + " " + r.from + " → " + r.to + " " + r.qty + r.unit); });
+    lines.push("합계 " + Object.keys(sum).map(function (u) { return sum[u] + u; }).join(", "));
+    return lines.join("\n");
+  }
+  $("copy").addEventListener("click", function () {
+    if (!todays().length) { setHint("복사할 기록이 없습니다.", "err"); return; }
+    var text = summaryText();
+    var done = function () { setHint("오늘 기록을 복사했습니다.", "ok"); };
+    var fail = function () {
+      var ta = document.createElement("textarea"); ta.value = text; ta.style.cssText = "position:fixed;opacity:0";
+      document.body.appendChild(ta); ta.select();
+      try { document.execCommand("copy"); done(); } catch (e) { setHint("복사하지 못했습니다.", "err"); }
+      ta.remove();
+    };
+    if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(done, fail); else fail();
+  });
+
+  // CSV 저장
+  $("csv").hidden = false;
+  $("csv").addEventListener("click", function () {
+    var rows = todays();
+    if (!rows.length) { setHint("저장할 기록이 없습니다.", "err"); return; }
+    var esc = function (v) { return '"' + String(v).replace(/"/g, '""') + '"'; };
+    var csv = "\ufeff날짜,시간,상차지,하차지,상차수량,단위\n" + rows.map(function (r) {
+      return [r.date, r.time, r.from, r.to, r.qty, r.unit].map(esc).join(",");
+    }).join("\n");
+    var url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    var a = document.createElement("a"); a.href = url; a.download = "상차기록_" + todayKey() + ".csv";
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(url); }, 2000);
+    setHint("CSV를 저장했습니다.", "ok");
+  });
+
+  load(); render();
+})();
+</script>
+<script>
+if ("serviceWorker" in navigator) { window.addEventListener("load", function () { navigator.serviceWorker.register("sw.js").catch(function () {}); }); }
+</script>
+</body>
+</html>
